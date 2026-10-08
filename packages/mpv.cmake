@@ -1,3 +1,4 @@
+# HelloFeedback: LGPL 빌드 (-Dgpl=false). GPL 전용 기능(dvdnav, rubberband)은 끈다.
 ExternalProject_Add(mpv
     DEPENDS
         angle-headers
@@ -6,13 +7,10 @@ ExternalProject_Add(mpv
         lcms2
         libarchive
         libass
-        libdvdnav
-        libdvdread
         libiconv
         libjpeg
         libpng
         luajit
-        rubberband
         uchardet
         openal-soft
         mujs
@@ -41,15 +39,16 @@ ExternalProject_Add(mpv
         -Db_lto=true
         ${mpv_lto_mode}
         -Dlibmpv=true
+        -Dgpl=false
         -Dpdf-build=enabled
         -Dlua=enabled
         -Djavascript=enabled
         -Dsdl2-gamepad=enabled
         -Dlibarchive=enabled
         -Dlibbluray=enabled
-        -Ddvdnav=enabled
+        -Ddvdnav=disabled
         -Duchardet=enabled
-        -Drubberband=enabled
+        -Drubberband=disabled
         -Dlcms2=enabled
         -Dopenal=enabled
         -Dspirv-cross=enabled

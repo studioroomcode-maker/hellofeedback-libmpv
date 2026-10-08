@@ -1,0 +1,184 @@
+# HelloFeedback 용 LGPL libmpv (Windows x86_64) 빌드.
+# 1) toolchain: LLVM/Clang mingw 툴체인. 캐시가 있으면 건너뛴다.
+# 2) libmpv: ffmpeg(LGPL, 전체 디코더) + mpv(-Dgpl=false) → mpv-dev-x86_64-*.7z 를 릴리스로 올린다.
+name: HelloFeedback libmpv (LGPL)
+defaults:
+  run:
+    shell: bash
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'GitHub 릴리스로 올리기'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  CACHE_PREFIX: hf-v1
+  CMAKE_ARGS: >-
+    -DTARGET_ARCH=x86_64-w64-mingw32 -DCOMPILER_TOOLCHAIN=clang
+    -DSINGLE_SOURCE_LOCATION=src_packages_abs -DENABLE_CCACHE=ON
+    -G Ninja
+
+jobs:
+  toolchain:
+    name: Toolchain
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    container:
+      image: docker://ghcr.io/shinchiro/archlinux:latest
+    steps:
+      - name: Setup git config
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global --add safe.directory $PWD
+
+      - uses: actions/checkout@v4
+
+      - name: Loading clang root cache
+        id: clang_root_cache
+        uses: actions/cache/restore@v4
+        with:
+          path: clang_root
+          key: ${{ env.CACHE_PREFIX }}-clang_root-${{ hashFiles('toolchain/**', 'packages/llvm*.cmake', 'packages/rustup.cmake') }}
+
+      - name: Loading x86_64 toolchain cache
+        id: x86_64_cache
+        uses: actions/cache/restore@v4
+        with:
+          path: build_x86_64
+          key: ${{ env.CACHE_PREFIX }}-x86_64_toolchain-${{ hashFiles('toolchain/**', 'packages/llvm*.cmake', 'packages/rustup.cmake') }}
+
+      - name: Building LLVM and rustup
+        if: steps.clang_root_cache.outputs.cache-hit != 'true'
+        run: |
+          cmake ${CMAKE_ARGS//src_packages_abs/$PWD/src_packages} -DCMAKE_INSTALL_PREFIX=$PWD/clang_root -DMINGW_INSTALL_PREFIX=$PWD/build_x86_64/x86_64-w64-mingw32 -DRUSTUP_LOCATION=$PWD/clang_root/install_rustup -B build_x86_64 -S $PWD
+          ninja -C build_x86_64 llvm
+          ninja -C build_x86_64 rustup
+          ninja -C build_x86_64 cargo-clean
+
+      - name: Building x86_64 toolchain
+        if: steps.x86_64_cache.outputs.cache-hit != 'true'
+        run: |
+          cmake ${CMAKE_ARGS//src_packages_abs/$PWD/src_packages} -DCMAKE_INSTALL_PREFIX=$PWD/clang_root -DMINGW_INSTALL_PREFIX=$PWD/build_x86_64/x86_64-w64-mingw32 -DRUSTUP_LOCATION=$PWD/clang_root/install_rustup -B build_x86_64 -S $PWD
+          ninja -C build_x86_64 llvm-clang
+          rm -rf build_x86_64/{toolchain,packages} || true
+
+      - name: Saving clang root
+        if: steps.clang_root_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: clang_root
+          key: ${{ steps.clang_root_cache.outputs.cache-primary-key }}
+
+      - name: Saving x86_64 toolchain
+        if: steps.x86_64_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: build_x86_64
+          key: ${{ steps.x86_64_cache.outputs.cache-primary-key }}
+
+      - name: Collecting logs
+        if: failure()
+        run: |
+          mkdir -p logs && cp -fr $(find build_x86_64 -type f -iname "*-*.log") logs || true
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: toolchain-logs
+          path: logs
+          retention-days: 3
+
+  libmpv:
+    name: libmpv
+    needs: toolchain
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    permissions:
+      contents: write
+    container:
+      image: docker://ghcr.io/shinchiro/archlinux:latest
+    steps:
+      - name: Setup git config
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global --add safe.directory $PWD
+
+      - uses: actions/checkout@v4
+
+      - name: Loading clang root cache
+        uses: actions/cache/restore@v4
+        with:
+          path: clang_root
+          key: ${{ env.CACHE_PREFIX }}-clang_root-${{ hashFiles('toolchain/**', 'packages/llvm*.cmake', 'packages/rustup.cmake') }}
+          fail-on-cache-miss: true
+
+      - name: Loading x86_64 toolchain cache
+        uses: actions/cache/restore@v4
+        with:
+          path: build_x86_64
+          key: ${{ env.CACHE_PREFIX }}-x86_64_toolchain-${{ hashFiles('toolchain/**', 'packages/llvm*.cmake', 'packages/rustup.cmake') }}
+          fail-on-cache-miss: true
+
+      - name: Building libmpv
+        run: |
+          cmake ${CMAKE_ARGS//src_packages_abs/$PWD/src_packages} -DCMAKE_INSTALL_PREFIX=$PWD/clang_root -DMINGW_INSTALL_PREFIX=$PWD/build_x86_64/x86_64-w64-mingw32 -DRUSTUP_LOCATION=$PWD/clang_root/install_rustup -DCLANG_PACKAGES_LTO=ON --fresh -B build_x86_64 -S $PWD
+          ninja -C build_x86_64 download || true
+          ninja -C build_x86_64 mpv
+
+      - name: Packaging
+        id: pack
+        run: |
+          ninja -C build_x86_64 mpv-packaging
+          mkdir -p release
+          mv build_x86_64/mpv-dev-x86_64-*.7z release/
+          cd release
+          sha256sum *.7z > SHA256SUMS.txt
+          echo "tag=$(date -u +%Y%m%d)-$(git -C ../src_packages/mpv rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: LGPL check
+        run: |
+          # FFmpeg configure 는 마지막에 "License: ..." 를 출력한다 (빌드 폴더는 정리되지만 로그는 남는다).
+          fflog=$(grep -rl --include="ffmpeg-configure-*.log" "^License:" build_x86_64/packages/ffmpeg-prefix | head -1)
+          grep -H "^License:" "$fflog"
+          grep -q "^License: LGPL" "$fflog"
+          mplog=$(ls build_x86_64/packages/mpv-prefix/src/mpv-stamp/mpv-configure-*.log | head -1)
+          grep -E -q -- "-Dgpl=false|gpl *: *false" "$mplog"
+          # 혹시 GPL 라이브러리가 링크됐는지 바이너리에서도 확인
+          dll=$(find build_x86_64 -name libmpv-2.dll | head -1)
+          if grep -a -q "x264 - core\|libx265\|RubberBand" "$dll"; then echo "GPL 라이브러리 흔적"; exit 1; fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mpv-dev-x86_64
+          path: release
+
+      - name: Release
+        if: inputs.release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.pack.outputs.tag }}
+          name: libmpv LGPL ${{ steps.pack.outputs.tag }}
+          body: |
+            HelloFeedback 용 LGPL libmpv (Windows x86_64).
+            FFmpeg는 --enable-gpl 없이(LGPLv3), mpv는 -Dgpl=false 로 빌드했습니다.
+            빌드 설정은 이 저장소의 packages/ffmpeg.cmake, packages/mpv.cmake 와
+            .github/workflows/hellofeedback.yml 이 전부입니다.
+          files: release/*
+
+      - name: Collecting logs
+        if: failure()
+        run: |
+          mkdir -p logs && cp -fr $(find build_x86_64 -type f -iname "*-*.log" -or -wholename "*/ffbuild/config.log") logs || true
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: libmpv-logs
+          path: logs
+          retention-days: 3

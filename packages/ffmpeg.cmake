@@ -1,7 +1,9 @@
+# HelloFeedback: LGPL 빌드. GPL 전용 라이브러리(x264, x265, davs2, rubberband, dvdnav/dvdread,
+# avisynth, zvbi)와 --enable-gpl 을 뺐다. 디코더는 전부 켜 둔다(ProRes, DNxHD, QuickTime Animation,
+# CineForm, HAP 등은 FFmpeg 자체 LGPL 구현). --enable-version3 이므로 결과물은 LGPLv3.
 ExternalProject_Add(ffmpeg
     DEPENDS
         amf-headers
-        avisynth-headers
         nvcodec-headers
         bzip2
         lame
@@ -11,8 +13,6 @@ ExternalProject_Add(ffmpeg
         libsrt
         libass
         libbluray
-        libdvdnav
-        libdvdread
         libmodplug
         libpng
         libsoxr
@@ -26,22 +26,17 @@ ExternalProject_Add(ffmpeg
         opus
         speex
         vorbis
-        x264
-        ${ffmpeg_x265}
         libxml2
         libvpl
         libopenmpt
         libjxl
         libplacebo
-        libzvbi
         libaribcaption
         aom
         svtav1
         dav1d
         vapoursynth
         ${ffmpeg_uavs3d}
-        ${ffmpeg_davs2}
-        rubberband
         libva
         openal-soft
     GIT_REPOSITORY https://github.com/FFmpeg/FFmpeg.git
@@ -57,14 +52,10 @@ ExternalProject_Add(ffmpeg
         --pkg-config-flags=--static
         --enable-cross-compile
         --enable-runtime-cpudetect
-        --enable-gpl
         --enable-version3
-        --enable-avisynth
         --enable-vapoursynth
         --enable-libass
         --enable-libbluray
-        --enable-libdvdnav
-        --enable-libdvdread
         --enable-libfreetype
         --enable-libfribidi
         --enable-libfontconfig
@@ -78,15 +69,11 @@ ExternalProject_Add(ffmpeg
         --enable-libspeex
         --enable-libvorbis
         --enable-libbs2b
-        --enable-librubberband
         --enable-libvpx
         --enable-libwebp
-        --enable-libx264
-        --enable-libx265
         --enable-libaom
         --enable-libsvtav1
         --enable-libdav1d
-        ${ffmpeg_davs2_cmd}
         ${ffmpeg_uavs3d_cmd}
         --enable-libzimg
         --enable-openssl
@@ -97,7 +84,6 @@ ExternalProject_Add(ffmpeg
         --enable-libvpl
         --enable-libjxl
         --enable-libplacebo
-        --enable-libzvbi
         --enable-libaribcaption
         --enable-cuda-llvm
         --enable-cuvid
