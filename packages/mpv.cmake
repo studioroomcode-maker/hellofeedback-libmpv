@@ -1,4 +1,5 @@
 # HelloFeedback: LGPL 빌드 (-Dgpl=false). GPL 전용 기능(dvdnav, rubberband)은 끈다.
+# 로컬 파일만 열기 때문에 curl(네트워크 스트리밍)도 뺀다.
 ExternalProject_Add(mpv
     DEPENDS
         angle-headers
@@ -22,7 +23,6 @@ ExternalProject_Add(mpv
         libsdl2
         subrandr
         libsixel
-        curl
     GIT_REPOSITORY https://github.com/mpv-player/mpv.git
     SOURCE_DIR ${SOURCE_LOCATION}
     GIT_CLONE_FLAGS "--filter=tree:0"
@@ -57,7 +57,7 @@ ExternalProject_Add(mpv
         -Dsubrandr=enabled
         -Dsixel=enabled
         ${mpv_gl}
-        -Dlibcurl=enabled
+        -Dlibcurl=disabled
         -Dc_args='-Wno-error=int-conversion'
     BUILD_COMMAND ${EXEC} LTO_JOB=1 PDB=1 ninja -C <BINARY_DIR>
     INSTALL_COMMAND ""
