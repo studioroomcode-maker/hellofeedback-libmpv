@@ -141,6 +141,12 @@ jobs:
           sha256sum *.7z > SHA256SUMS.txt
           echo "tag=$(date -u +%Y%m%d)-$(git -C ../src_packages/mpv rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
+      # 검사 전에 올려 둔다: 검사가 실패해도 결과물을 받아 확인할 수 있게 (릴리스는 검사 통과 후에만).
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mpv-dev-x86_64
+          path: release
+
       - name: LGPL check
         run: |
           # FFmpeg configure 는 마지막에 "License: ..." 를 출력한다 (빌드 폴더는 정리되지만 로그는 남는다).
@@ -154,13 +160,14 @@ jobs:
           7z e -y -o/tmp/dllchk release/mpv-dev-x86_64-*.7z libmpv-2.dll
           dll=/tmp/dllchk/libmpv-2.dll
           test -s "$dll"
-          if grep -a -q "x264 - core\|libx265\|RubberBand" "$dll"; then echo "GPL 라이브러리 흔적"; exit 1; fi
+          # 각 라이브러리 내부에만 있는 문자열 (FFmpeg H.264 디코더도 "x264 - core" 는 갖고 있어서 그건 못 쓴다).
+          # x264 로그 접두어, x265 내부 세마포어 이름, RubberBand C++ 타입 이름, libdvdread 함수 이름.
+          bad=0
+          for m in "x264 [%s]" "_x265_semW_" "19RubberBandStretcher" "DVDOpen"; do
+            if grep -a -q -F -- "$m" "$dll"; then echo "GPL 라이브러리 흔적: $m"; bad=1; fi
+          done
+          test $bad = 0
           echo "LGPL 확인 통과"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: mpv-dev-x86_64
-          path: release
 
       - name: Release
         if: inputs.release
