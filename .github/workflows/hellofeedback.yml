@@ -147,11 +147,15 @@ jobs:
           fflog=$(grep -rl --include="ffmpeg-configure-*.log" "^License:" build_x86_64/packages/ffmpeg-prefix | head -1)
           grep -H "^License:" "$fflog"
           grep -q "^License: LGPL" "$fflog"
-          mplog=$(ls build_x86_64/packages/mpv-prefix/src/mpv-stamp/mpv-configure-*.log | head -1)
-          grep -E -q -- "-Dgpl=false|gpl *: *false" "$mplog"
-          # 혹시 GPL 라이브러리가 링크됐는지 바이너리에서도 확인
-          dll=$(find build_x86_64 -name libmpv-2.dll | head -1)
+          # meson 요약은 out 로그에 있다 (err 로그를 집지 않도록 이름을 정확히).
+          mplog=build_x86_64/packages/mpv-prefix/src/mpv-stamp/mpv-configure-out.log
+          grep -H -E "^ *gpl *: *false" "$mplog"
+          # 혹시 GPL 라이브러리가 링크됐는지, 실제로 배포할 7z 안의 DLL 에서도 확인
+          7z e -y -o/tmp/dllchk release/mpv-dev-x86_64-*.7z libmpv-2.dll
+          dll=/tmp/dllchk/libmpv-2.dll
+          test -s "$dll"
           if grep -a -q "x264 - core\|libx265\|RubberBand" "$dll"; then echo "GPL 라이브러리 흔적"; exit 1; fi
+          echo "LGPL 확인 통과"
 
       - uses: actions/upload-artifact@v4
         with:
